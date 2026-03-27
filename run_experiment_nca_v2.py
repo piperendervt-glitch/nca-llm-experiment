@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 # sdnd-proof の src を参照
-SDND_SRC = Path("D:/Users/pipe_render/sdnd-proof/src")
+SDND_SRC = Path("C:/Users/pipe_render/sdnd-proof/src")
 sys.path.insert(0, str(SDND_SRC))
 sys.path.insert(0, str(Path(__file__).parent))
 
