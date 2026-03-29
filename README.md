@@ -58,6 +58,12 @@ All nodes update synchronously — the same rule as NCA's parallel cell updates.
 | NCA v3 | 52.0% | 6.0% | 98.0% | +7.0% | Devil's advocate rule — CONTRADICTION bias persisted |
 | NCA v4 | 53.0% | 24.0% | 82.0% | +8.0% | Confidence-weighted updates — best balance between both |
 
+> **Note on v5 results**: The best combination (61.0%, qwen2.5:7b + llama3.2:3b + mistral:7b)
+> was selected post-hoc from 56 unique combinations. This constitutes a multiple comparison
+> without correction. The result should be interpreted as the upper bound of performance
+> under heterogeneous model selection, not as a statistically validated single hypothesis.
+> The v5 mean accuracy across all 56 combinations was 53.3%.
+
 ### Groupthink Statistics
 
 | Version | All CONTRADICTION | All CONSISTENT | Split |

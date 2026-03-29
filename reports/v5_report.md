@@ -12,6 +12,10 @@
 
 **vs v1-v4 baselines:** The v5 best (61%) surpasses all prior versions: Fixed (45%), v1 (49%), v2 (55%), v3 (52%), v4 (53%). This is a **+16pp improvement over Fixed** and **+6pp over v2** (the previous best).
 
+> **Statistical note**: The best combination (61%) is the maximum of 56 post-hoc comparisons.
+> Without multiple comparison correction, this figure should be interpreted as an
+> exploratory upper bound. The mean across all combinations was 53.3%.
+
 ### Key Findings
 
 - **Model diversity matters more than model size.** The top combo mixes 7B, 3B, and 7B architectures from three different families (Qwen, Llama, Mistral). Same-family combos tend to underperform.
