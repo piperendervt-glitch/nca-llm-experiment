@@ -149,7 +149,51 @@ The fixed network baseline is taken directly from [sdnd-proof](https://github.co
 
 ---
 
-## Related
+## Related Work
 
-- [sdnd-proof](https://github.com/piperendervt-glitch/sdnd-proof) — Adaptive Artificial Synapse (AAS) experiment
-- [Growing Neural Cellular Automata](https://distill.pub/2020/growing-ca/) — Original NCA paper
+### Direct comparisons
+
+- **Multi-Agent Debate (MAD)** — Du et al. (2023) [arXiv:2305.14325](https://arxiv.org/abs/2305.14325).
+  Multiple LLM instances propose and debate responses over multiple rounds.
+  Key difference: MAD uses fully-connected topology; this work uses a fixed ring with
+  synchronous NCA-style updates. MAD focuses on accuracy improvement; this work
+  additionally studies bias propagation and groupthink structure.
+
+- **Encouraging Divergent Thinking via MAD** — Liang et al. (2024) [EMNLP 2024](https://aclanthology.org/2024.emnlp-main.992/).
+  Introduces the Degeneration-of-Thought (DoT) problem and tit-for-tat dynamics.
+  The groupthink observed in v1 (99/100 tasks converging to CONTRADICTION) is a
+  direct instance of DoT in a ring topology.
+
+- **Mixture of Agents (MoA)** — Wang et al. (2024) [arXiv:2406.04692](https://arxiv.org/abs/2406.04692).
+  Heterogeneous LLM agents in a layered, fully-broadcast architecture.
+  Key difference: MoA uses hierarchical layers with full broadcast; this work uses
+  a flat ring with local-only neighbor communication. v5's heterogeneous model
+  combinations are directly comparable to MoA's diversity findings.
+
+- **Should we be going MAD?** — Smit et al. (2024) [ICML 2024](https://proceedings.mlr.press/v235/smit24a.html).
+  Benchmarks MAD strategies and finds that agreement intensity is a critical
+  hyperparameter. v6 of this work directly tests agreement intensity via random
+  sampling, providing small-model (3b-8b) evidence for Smit et al.'s findings.
+
+### Related architectures
+
+- **Reflexion** — Shinn et al. (2023) [arXiv:2303.11366](https://arxiv.org/abs/2303.11366).
+  LLM agents with dynamic memory and self-reflection. The proposed aas-v2
+  (past-log-aware AAS) shares the core insight of using historical performance
+  to inform future decisions.
+
+- **Growing Neural Cellular Automata** — Mordvintsev et al. (2020) [Distill](https://distill.pub/2020/growing-ca/).
+  The conceptual inspiration for applying local update rules to node networks.
+  Note: this work is NCA-*inspired*, not a direct implementation — LLM outputs
+  are discrete text, weights are not shared, and topology is fixed rather than emergent.
+
+- **CAMEL** — Li et al. (2023) [arXiv:2303.17760](https://arxiv.org/abs/2303.17760).
+  Communicative agents for LLM society exploration. General multi-agent framework;
+  this work differs in its focus on fixed-topology synchronous update rules.
+
+### Bias and groupthink in LLMs
+
+- **Contrastive Chain-of-Thought** — Related to the systematic CONTRADICTION bias
+  observed across v1-v6. The mirror effect (NCA → 82% CONTRADICTION vs
+  Self-Consistency → 82% CONSISTENT with identical models) suggests that
+  aggregation mechanism, not model priors alone, drives output distribution.
