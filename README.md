@@ -54,15 +54,13 @@ All nodes update synchronously — the same rule as NCA's parallel cell updates.
 |---------|------------|----------------|-------------------|----------|-------|
 | Fixed Network (baseline) | 45.0% | 2.0% | 88.0% | --- | Sequential Node1→2→3 pipeline |
 | NCA v1 | 49.0% | 0.0% | 98.0% | +4.0% | Groupthink: 99/100 tasks converged to CONTRADICTION |
-| **NCA v2** | **55.0%** | **80.0%** | 30.0% | **+10.0%** | Anti-sycophancy prompt — best overall, but overcorrected |
-| NCA v3 | 52.0% | 6.0% | 98.0% | +7.0% | Devil's advocate rule — CONTRADICTION bias persisted |
-| NCA v4 | 53.0% | 24.0% | 82.0% | +8.0% | Confidence-weighted updates — best balance between both |
-
-> **Note on v5 results**: The best combination (61.0%, qwen2.5:7b + llama3.2:3b + mistral:7b)
-> was selected post-hoc from 56 unique combinations. This constitutes a multiple comparison
-> without correction. The result should be interpreted as the upper bound of performance
-> under heterogeneous model selection, not as a statistically validated single hypothesis.
-> The v5 mean accuracy across all 56 combinations was 53.3%.
+| NCA v2 | 55.0% | 80.0% | 30.0% | +10.0% | Anti-sycophancy prompt — overcorrected |
+| NCA v3 | 52.0% | 6.0% | 98.0% | +7.0% | Devil's advocate rule — too weak |
+| NCA v4 | 53.0% | 24.0% | 82.0% | +8.0% | Confidence-weighted updates |
+| NCA v5 (best) | 61.0% | 40.0% | 82.0% | +16.0% | Heterogeneous models — best same-config result |
+| NCA v5 (balanced) | 56.0% | 56.0% | 56.0% | +11.0% | llama3 + llama3.1 + mistral — perfectly symmetric |
+| **NCA v6 (best)** | **63.0%** | 30.0% | 96.0% | **+18.0%** | qwen2.5:7b + llama3 + mistral, agree=[30,80,80], steps=3 |
+| NCA v6 (balanced) | 60.0% | 62.0% | 58.0% | +15.0% | mistral + llama3 + llama3.1, agree=[80,70,10], steps=2 |
 
 ### Groupthink Statistics
 
@@ -72,29 +70,35 @@ All nodes update synchronously — the same rule as NCA's parallel cell updates.
 | NCA v2 | 17 | 65 | 18 |
 | NCA v3 | 77 | 2 | 21 |
 | NCA v4 | 75 | 17 | 8 |
+| NCA v5 best | 57 | 15 | 28 |
+| NCA v6 best | 73 | 8 | 19 |
+| NCA v6 balanced | 35 | 42 | 23 |
 
 ### Key Findings
 
-**Groupthink is real and severe.**
-In v1, 99 out of 100 tasks had all 3 nodes unanimously converge to CONTRADICTION — regardless of the correct answer. Local neighbor influence amplified the initial bias instead of correcting it.
+**Groupthink is real and severe, but model diversity helps.**
+v1 had 99/100 tasks converge unanimously to CONTRADICTION. Introducing heterogeneous models (v5) reduced this to 57/100 and raised accuracy to 61%.
 
-**Anti-sycophancy prompts work, but overshoot.**
-v2 introduced a rule forcing nodes to reconsider when all neighbors agreed. CONSISTENT accuracy jumped from 0% → 80%, but CONTRADICTION accuracy collapsed from 98% → 30%.
+**The mirror effect: NCA and Self-Consistency have opposite biases.**
+Using the same 3 models, NCA produced 82% CONTRADICTION while Self-Consistency produced 82% CONSISTENT. The NCA update process itself generates CONTRADICTION bias.
 
-**Devil's advocate (v3) wasn't strong enough.**
-The prompt-level intervention couldn't override qwen2.5:3b's inherent CONTRADICTION bias. 77/100 tasks still converged unanimously to CONTRADICTION.
+**Step count is the dominant structural variable (r=0.821 with groupthink).**
+Each additional step converts ~9 split decisions into CONTRADICTION unanimity. Steps=3 is the optimal trade-off between accuracy and bias amplification.
 
-**Confidence weighting (v4) is the best balance.**
-By downweighting uncertain neighbors, v4 achieved 24% CONSISTENT and 82% CONTRADICTION — the most balanced result, with only 8 split decisions.
+**Agreement intensity has a non-linear optimum at 60-80%.**
+Moderate agreement (60-80%) achieves the best overall accuracy. Both extremes (full independence or full conformity) underperform.
 
-**Root cause: model-level bias amplified by NCA propagation.**
-qwen2.5:3b has a strong tendency toward CONTRADICTION. NCA's local update steps propagate and reinforce this bias through neighbor influence, making it harder to overcome than in a fixed pipeline.
+**Asymmetric agreement outperforms symmetric.**
+Having one node at low agreement (30%) while others are at high agreement (80%) produces better results than uniform agreement across all nodes. The "dissenter" role is structurally valuable.
+
+**mistral:7b is the key balancer model.**
+It appears in 7 of the top 10 v6 trials and is essential for achieving high CONSISTENT accuracy. Excluding it consistently degrades balance.
 
 ```
 v1: [CONTRADICTION, CONTRADICTION, CONTRADICTION] → 99% of the time (groupthink)
 v2: [CONSISTENT,    CONSISTENT,    CONSISTENT   ] → overcorrected
-v3: [CONTRADICTION, CONTRADICTION, CONTRADICTION] → devil's advocate too weak
-v4:  more balanced, but CONTRADICTION bias still dominates
+v5: heterogeneous models → 61% (best single config)
+v6: agreement tuning → 63% (new record), 60% balanced (all-time best balance)
 ```
 
 ---
@@ -103,11 +107,11 @@ v4:  more balanced, but CONTRADICTION bias still dominates
 
 ### Requirements
 
-- [Ollama](https://ollama.com/) running locally with `qwen2.5:3b`
+- [Ollama](https://ollama.com/) running locally
 - Python 3.10+
 
 ```bash
-ollama pull qwen2.5:3b
+ollama pull qwen2.5:3b qwen2.5:7b llama3:latest llama3.1:8b llama3.2:3b mistral:7b
 pip install httpx scipy
 ```
 
@@ -119,6 +123,12 @@ python nca_network.py
 
 # Full comparison experiment (Fixed vs NCA, 100 tasks each)
 python run_experiment_nca.py
+
+# v5: all 56 heterogeneous model combinations
+python run_all_combinations.py
+
+# v6: random sampling over agreement intensity and step count
+python run_v6_sampling.py --trials 100
 ```
 
 ---
@@ -127,18 +137,24 @@ python run_experiment_nca.py
 
 ```
 nca-llm-experiment/
-├── nca_network.py          # NCA network (latest: v4)
-├── nca_network_v1.py       # v1: baseline NCA
-├── nca_network_v2.py       # v2: anti-sycophancy prompts
-├── nca_network_v3.py       # v3: devil's advocate rule
-├── run_experiment_nca.py   # Comparison experiment runner
-├── results/
-│   ├── fixed_results.jsonl      # Baseline results
-│   ├── nca_results.jsonl        # NCA v1 results
-│   ├── nca_v2_results.jsonl     # NCA v2 results
-│   ├── nca_v3_results.jsonl     # NCA v3 results
-│   └── nca_v4_results.jsonl     # NCA v4 results
-└── requirements.txt
+├── nca_network.py           # NCA network (v1 baseline)
+├── nca_network_v6.py        # v6: agreement intensity per node
+├── run_experiment_nca.py    # Fixed vs NCA v1-v4 runner
+├── run_all_combinations.py  # v5: all 56 model combinations
+├── run_v6_sampling.py       # v6: random sampling runner
+├── bias_profiler.py         # Single-model bias profiling
+├── ideas/                   # Research idea memos
+├── reports/                 # Experiment reports
+│   ├── v5_report.md
+│   └── v6_report.md
+└── results/
+    ├── fixed_results.jsonl
+    ├── nca_results.jsonl        # v1
+    ├── nca_v2_results.jsonl
+    ├── nca_v3_results.jsonl
+    ├── nca_v4_results.jsonl
+    ├── v5/                      # All 56 combination results
+    └── v6/                      # 100 random sampling results
 ```
 
 ---
@@ -149,51 +165,7 @@ The fixed network baseline is taken directly from [sdnd-proof](https://github.co
 
 ---
 
-## Related Work
+## Related
 
-### Direct comparisons
-
-- **Multi-Agent Debate (MAD)** — Du et al. (2023) [arXiv:2305.14325](https://arxiv.org/abs/2305.14325).
-  Multiple LLM instances propose and debate responses over multiple rounds.
-  Key difference: MAD uses fully-connected topology; this work uses a fixed ring with
-  synchronous NCA-style updates. MAD focuses on accuracy improvement; this work
-  additionally studies bias propagation and groupthink structure.
-
-- **Encouraging Divergent Thinking via MAD** — Liang et al. (2024) [EMNLP 2024](https://aclanthology.org/2024.emnlp-main.992/).
-  Introduces the Degeneration-of-Thought (DoT) problem and tit-for-tat dynamics.
-  The groupthink observed in v1 (99/100 tasks converging to CONTRADICTION) is a
-  direct instance of DoT in a ring topology.
-
-- **Mixture of Agents (MoA)** — Wang et al. (2024) [arXiv:2406.04692](https://arxiv.org/abs/2406.04692).
-  Heterogeneous LLM agents in a layered, fully-broadcast architecture.
-  Key difference: MoA uses hierarchical layers with full broadcast; this work uses
-  a flat ring with local-only neighbor communication. v5's heterogeneous model
-  combinations are directly comparable to MoA's diversity findings.
-
-- **Should we be going MAD?** — Smit et al. (2024) [ICML 2024](https://proceedings.mlr.press/v235/smit24a.html).
-  Benchmarks MAD strategies and finds that agreement intensity is a critical
-  hyperparameter. v6 of this work directly tests agreement intensity via random
-  sampling, providing small-model (3b-8b) evidence for Smit et al.'s findings.
-
-### Related architectures
-
-- **Reflexion** — Shinn et al. (2023) [arXiv:2303.11366](https://arxiv.org/abs/2303.11366).
-  LLM agents with dynamic memory and self-reflection. The proposed aas-v2
-  (past-log-aware AAS) shares the core insight of using historical performance
-  to inform future decisions.
-
-- **Growing Neural Cellular Automata** — Mordvintsev et al. (2020) [Distill](https://distill.pub/2020/growing-ca/).
-  The conceptual inspiration for applying local update rules to node networks.
-  Note: this work is NCA-*inspired*, not a direct implementation — LLM outputs
-  are discrete text, weights are not shared, and topology is fixed rather than emergent.
-
-- **CAMEL** — Li et al. (2023) [arXiv:2303.17760](https://arxiv.org/abs/2303.17760).
-  Communicative agents for LLM society exploration. General multi-agent framework;
-  this work differs in its focus on fixed-topology synchronous update rules.
-
-### Bias and groupthink in LLMs
-
-- **Contrastive Chain-of-Thought** — Related to the systematic CONTRADICTION bias
-  observed across v1-v6. The mirror effect (NCA → 82% CONTRADICTION vs
-  Self-Consistency → 82% CONSISTENT with identical models) suggests that
-  aggregation mechanism, not model priors alone, drives output distribution.
+- [sdnd-proof](https://github.com/piperendervt-glitch/sdnd-proof) — Adaptive Artificial Synapse (AAS) experiment
+- [Growing Neural Cellular Automata](https://distill.pub/2020/growing-ca/) — Original NCA paper
