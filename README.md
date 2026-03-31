@@ -38,67 +38,81 @@ All nodes update synchronously — the same rule as NCA's parallel cell updates.
 
 ---
 
-## Task
+## Tasks
 
-**`world_consistency`**: Given a world rule and a statement, detect whether the statement contradicts the rule.
-
+### `world_consistency` (v1–v6)
+Given a world rule and a statement, detect whether the statement contradicts the rule.
 - 100 tasks total (50 consistent, 50 contradictory)
-- World rules and sentences sourced from [sdnd-proof/task_generator.py](https://github.com/piperendervt-glitch/sdnd-proof/blob/main/src/task_generator.py)
-- Labels: `CONSISTENT` (no contradiction) / `CONTRADICTION`
+- Labels: `CONSISTENT` / `CONTRADICTION`
+
+### `math` (v7–)
+Elementary and middle school math verification tasks.
+- Labels: `CORRECT` / `INCORRECT`
+- v7: 100 elementary tasks (calculation, logic, word problems, sequences)
+- v7.5: 75 middle school tasks (grade 7 / 8 / 9, 25 each)
 
 ---
 
 ## Results
 
-| Version | Overall Acc | CONSISTENT Acc | CONTRADICTION Acc | vs Fixed | Notes |
-|---------|------------|----------------|-------------------|----------|-------|
-| Fixed Network (baseline) | 45.0% | 2.0% | 88.0% | --- | Sequential Node1→2→3 pipeline |
-| NCA v1 | 49.0% | 0.0% | 98.0% | +4.0% | Groupthink: 99/100 tasks converged to CONTRADICTION |
-| NCA v2 | 55.0% | 80.0% | 30.0% | +10.0% | Anti-sycophancy prompt — overcorrected |
-| NCA v3 | 52.0% | 6.0% | 98.0% | +7.0% | Devil's advocate rule — too weak |
-| NCA v4 | 53.0% | 24.0% | 82.0% | +8.0% | Confidence-weighted updates |
-| NCA v5 (best) | 61.0% | 40.0% | 82.0% | +16.0% | Heterogeneous models — best same-config result |
-| NCA v5 (balanced) | 56.0% | 56.0% | 56.0% | +11.0% | llama3 + llama3.1 + mistral — perfectly symmetric |
-| **NCA v6 (best)** | **63.0%** | 30.0% | 96.0% | **+18.0%** | qwen2.5:7b + llama3 + mistral, agree=[30,80,80], steps=3 |
-| NCA v6 (balanced) | 60.0% | 62.0% | 58.0% | +15.0% | mistral + llama3 + llama3.1, agree=[80,70,10], steps=2 |
+### world_consistency tasks (v1–v6)
 
-### Groupthink Statistics
+| Version | Overall | CONSISTENT | CONTRADICTION | Notes |
+|---------|---------|-----------|---------------|-------|
+| Fixed (baseline) | 45% | 2% | 88% | Sequential pipeline |
+| NCA v1 | 49% | 0% | 98% | Groupthink: 99/100 → CONTRADICTION |
+| NCA v2 | 55% | 80% | 30% | Anti-sycophancy — overcorrected |
+| NCA v3 | 52% | 6% | 98% | Devil's advocate — too weak |
+| NCA v4 | 53% | 24% | 82% | Confidence-weighted updates |
+| NCA v5 (best) | 61% | 40% | 82% | Heterogeneous models |
+| NCA v5 (balanced) | 56% | 56% | 56% | Perfectly symmetric |
+| **NCA v6 (best)** | **63%** | 30% | 96% | agree=[30,80,80], steps=3 |
+| NCA v6 (balanced) | 60% | 62% | 58% | Best balance result |
 
-| Version | All CONTRADICTION | All CONSISTENT | Split |
-|---------|:-----------------:|:--------------:|:-----:|
-| NCA v1 | 99 | 0 | 0 |
-| NCA v2 | 17 | 65 | 18 |
-| NCA v3 | 77 | 2 | 21 |
-| NCA v4 | 75 | 17 | 8 |
-| NCA v5 best | 57 | 15 | 28 |
-| NCA v6 best | 73 | 8 | 19 |
-| NCA v6 balanced | 35 | 42 | 23 |
+### math tasks (v7)
+
+| Pattern | Overall | CORRECT | INCORRECT | Calc | Logic | Word | Seq |
+|---------|---------|---------|-----------|------|-------|------|-----|
+| best_fixed | **83%** | 77% | 90% | 92% | 72% | 92% | 76% |
+| best_rotating | 81% | **96%** | 65% | 92% | **100%** | 72% | 60% |
+| balanced_fixed | 68% | 73% | 62% | 80% | 68% | 68% | 56% |
+| balanced_rotating | 80% | 87% | 73% | 88% | 84% | 76% | 72% |
+| single_agent | **83%** | 69% | **98%** | 76% | 84% | 84% | 88% |
 
 ### Key Findings
 
 **Groupthink is real and severe, but model diversity helps.**
-v1 had 99/100 tasks converge unanimously to CONTRADICTION. Introducing heterogeneous models (v5) reduced this to 57/100 and raised accuracy to 61%.
+v1 had 99/100 tasks converge to CONTRADICTION. Heterogeneous models (v5) reduced this and raised accuracy to 61%.
 
 **The mirror effect: NCA and Self-Consistency have opposite biases.**
-Using the same 3 models, NCA produced 82% CONTRADICTION while Self-Consistency produced 82% CONSISTENT. The NCA update process itself generates CONTRADICTION bias.
+Same 3 models: NCA → 82% CONTRADICTION, Self-Consistency → 82% CONSISTENT. The NCA update process itself generates bias.
 
 **Step count is the dominant structural variable (r=0.821 with groupthink).**
-Each additional step converts ~9 split decisions into CONTRADICTION unanimity. Steps=3 is the optimal trade-off between accuracy and bias amplification.
+Each additional step converts ~9 split decisions into CONTRADICTION unanimity. Steps=3 is optimal.
 
 **Agreement intensity has a non-linear optimum at 60-80%.**
-Moderate agreement (60-80%) achieves the best overall accuracy. Both extremes (full independence or full conformity) underperform.
+Both extremes (full independence or full conformity) underperform.
 
 **Asymmetric agreement outperforms symmetric.**
-Having one node at low agreement (30%) while others are at high agreement (80%) produces better results than uniform agreement across all nodes. The "dissenter" role is structurally valuable.
+One dissenter node at 30% + two nodes at 80% beats uniform agreement.
 
-**mistral:7b is the key balancer model.**
-It appears in 7 of the top 10 v6 trials and is essential for achieving high CONSISTENT accuracy. Excluding it consistently degrades balance.
+**Role rotation is a de-biasing mechanism.**
+Rotating roles boost CORRECT accuracy by +14–19pp by breaking static information flow. Logic tasks benefit most: fixed 72% → rotating 100%.
+
+**Multi-model NCA helps more on ambiguous tasks.**
+On structured math, single agent (83%) ties with best NCA. On semantic world_consistency, NCA outperforms single agent by ~10pp. Coordination pays off when tasks are ambiguous.
+
+**The INCORRECT/CONTRADICTION bias is universal.**
+LLMs prefer to find fault across both math and semantic domains. Single agent: 69% CORRECT vs 98% INCORRECT on math; 30% CONSISTENT vs 96% CONTRADICTION on world_consistency.
+
+**Math tasks far exceed world_consistency accuracy (+20pp).**
+LLMs are fundamentally better at verifiable arithmetic than semantic contradiction detection, supporting the external verifier hypothesis.
 
 ```
-v1: [CONTRADICTION, CONTRADICTION, CONTRADICTION] → 99% of the time (groupthink)
-v2: [CONSISTENT,    CONSISTENT,    CONSISTENT   ] → overcorrected
-v5: heterogeneous models → 61% (best single config)
-v6: agreement tuning → 63% (new record), 60% balanced (all-time best balance)
+v1: groupthink → 99/100 CONTRADICTION (same-model NCA)
+v5: heterogeneous models → 61% (diversity breaks groupthink)
+v6: agreement tuning → 63%, steps=3 optimal (r=0.821)
+v7: role-division → 83% on math, rotation eliminates logic bias
 ```
 
 ---
@@ -129,6 +143,12 @@ python run_all_combinations.py
 
 # v6: random sampling over agreement intensity and step count
 python run_v6_sampling.py --trials 100
+
+# v7: role-division NCA on elementary math tasks
+python run_v7.py
+
+# v7.5: role-division NCA on middle school math tasks
+python run_v7_5.py
 ```
 
 ---
@@ -137,24 +157,32 @@ python run_v6_sampling.py --trials 100
 
 ```
 nca-llm-experiment/
-├── nca_network.py           # NCA network (v1 baseline)
-├── nca_network_v6.py        # v6: agreement intensity per node
-├── run_experiment_nca.py    # Fixed vs NCA v1-v4 runner
-├── run_all_combinations.py  # v5: all 56 model combinations
-├── run_v6_sampling.py       # v6: random sampling runner
-├── bias_profiler.py         # Single-model bias profiling
-├── ideas/                   # Research idea memos
-├── reports/                 # Experiment reports
+├── nca_network.py                    # NCA network (v1 baseline)
+├── nca_network_v6.py                 # v6: agreement intensity per node
+├── nca_network_v7.py                 # v7: role-division NCA
+├── run_experiment_nca.py             # Fixed vs NCA v1-v4 runner
+├── run_all_combinations.py           # v5: all 56 model combinations
+├── run_v6_sampling.py                # v6: random sampling runner
+├── run_v7.py                         # v7: role-division runner
+├── run_v7_5.py                       # v7.5: middle school tasks runner
+├── bias_profiler.py                  # Single-model bias profiling
+├── math_task_generator.py            # v7: elementary math tasks
+├── middle_school_task_generator.py   # v7.5: middle school math tasks
+├── ideas/                            # Research idea memos
+├── reports/                          # Experiment reports
 │   ├── v5_report.md
-│   └── v6_report.md
+│   ├── v6_report.md
+│   └── v7_report.md
 └── results/
     ├── fixed_results.jsonl
-    ├── nca_results.jsonl        # v1
+    ├── nca_results.jsonl             # v1
     ├── nca_v2_results.jsonl
     ├── nca_v3_results.jsonl
     ├── nca_v4_results.jsonl
-    ├── v5/                      # All 56 combination results
-    └── v6/                      # 100 random sampling results
+    ├── v5/                           # All 56 combination results
+    ├── v6/                           # 100 random sampling results
+    ├── v7/                           # Role-division math results
+    └── v7_5/                         # Middle school math results
 ```
 
 ---
