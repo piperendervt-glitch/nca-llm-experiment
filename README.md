@@ -46,10 +46,11 @@ Given a world rule and a statement, detect whether the statement contradicts the
 - Labels: `CONSISTENT` / `CONTRADICTION`
 
 ### `math` (v7–)
-Elementary and middle school math verification tasks.
+Elementary to high school math verification tasks.
 - Labels: `CORRECT` / `INCORRECT`
 - v7: 100 elementary tasks (calculation, logic, word problems, sequences)
 - v7.5: 75 middle school tasks (grade 7 / 8 / 9, 25 each)
+- v7.6: 75 high school tasks (grade 10 / 11 / 12, 25 each)
 
 ---
 
@@ -78,6 +79,16 @@ Elementary and middle school math verification tasks.
 | balanced_fixed | 68% | 73% | 62% | 80% | 68% | 68% | 56% |
 | balanced_rotating | 80% | 87% | 73% | 88% | 84% | 76% | 72% |
 | single_agent | **83%** | 69% | **98%** | 76% | 84% | 84% | 88% |
+
+### math difficulty series (v7 → v7.5 → v7.6)
+
+| Pattern | v7 (Elementary) | v7.5 (Middle) | v7.6 (High School) | Total Drop |
+|---------|----------------|--------------|-------------------|------------|
+| **best_fixed** | **83%** | 72% | **77%** | **-6pp** |
+| single_agent | **83%** | 75% | 71% | -12pp |
+| balanced_rotating | 80% | **77%** | 68% | -12pp |
+| best_rotating | 81% | 73% | 63% | -18pp |
+| balanced_fixed | 68% | 57% | 56% | -12pp |
 
 ### Key Findings
 
@@ -108,11 +119,24 @@ LLMs prefer to find fault across both math and semantic domains. Single agent: 6
 **Math tasks far exceed world_consistency accuracy (+20pp).**
 LLMs are fundamentally better at verifiable arithmetic than semantic contradiction detection, supporting the external verifier hypothesis.
 
+**The difficulty wall is at middle school, not high school.**
+best_fixed scores 83% → 72% → 77% across the difficulty series. High school trig/logs/derivatives are easier for LLMs than middle school simultaneous equations, because advanced topics are heavily memorized formulas.
+
+**Operation type, not grade level, determines LLM difficulty.**
+Pattern-match (80-100%) > formula+verify (60-80%) > multi-step procedure (40-60%) > symbolic manipulation (20-40%). This ordering is stable across all difficulty levels.
+
+**Role rotation has a valid range.**
+Rotation helps up to middle school level (+12-20pp). At high school difficulty, it becomes harmful — best_rotating's INCORRECT accuracy collapses to 31%.
+
+**best_fixed is the most robust configuration.**
+Only -6pp total drop from elementary to high school. The fixed Solver-Verifier-Critic pipeline handles increasing difficulty better than any other pattern.
+
 ```
 v1: groupthink → 99/100 CONTRADICTION (same-model NCA)
 v5: heterogeneous models → 61% (diversity breaks groupthink)
 v6: agreement tuning → 63%, steps=3 optimal (r=0.821)
 v7: role-division → 83% on math, rotation eliminates logic bias
+v7→v7.6: difficulty wall at middle school, operation type determines accuracy
 ```
 
 ---
@@ -149,6 +173,9 @@ python run_v7.py
 
 # v7.5: role-division NCA on middle school math tasks
 python run_v7_5.py
+
+# v7.6: role-division NCA on high school math tasks
+python run_v7_6.py
 ```
 
 ---
@@ -165,14 +192,18 @@ nca-llm-experiment/
 ├── run_v6_sampling.py                # v6: random sampling runner
 ├── run_v7.py                         # v7: role-division runner
 ├── run_v7_5.py                       # v7.5: middle school tasks runner
+├── run_v7_6.py                       # v7.6: high school tasks runner
 ├── bias_profiler.py                  # Single-model bias profiling
 ├── math_task_generator.py            # v7: elementary math tasks
 ├── middle_school_task_generator.py   # v7.5: middle school math tasks
+├── high_school_task_generator.py     # v7.6: high school math tasks
 ├── ideas/                            # Research idea memos
 ├── reports/                          # Experiment reports
 │   ├── v5_report.md
 │   ├── v6_report.md
-│   └── v7_report.md
+│   ├── v7_report.md
+│   ├── v7_5_report.md
+│   └── v7_6_report.md
 └── results/
     ├── fixed_results.jsonl
     ├── nca_results.jsonl             # v1
@@ -181,8 +212,9 @@ nca-llm-experiment/
     ├── nca_v4_results.jsonl
     ├── v5/                           # All 56 combination results
     ├── v6/                           # 100 random sampling results
-    ├── v7/                           # Role-division math results
-    └── v7_5/                         # Middle school math results
+    ├── v7/                           # Role-division elementary math
+    ├── v7_5/                         # Middle school math results
+    └── v7_6/                         # High school math results
 ```
 
 ---
