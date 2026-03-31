@@ -51,6 +51,7 @@ Elementary to high school math verification tasks.
 - v7: 100 elementary tasks (calculation, logic, word problems, sequences)
 - v7.5: 75 middle school tasks (grade 7 / 8 / 9, 25 each)
 - v7.6: 75 high school tasks (grade 10 / 11 / 12, 25 each)
+- v8: 350 tasks (all of the above) with adaptive model selection
 
 ---
 
@@ -90,6 +91,18 @@ Elementary to high school math verification tasks.
 | best_rotating | 81% | 73% | 63% | -18pp |
 | balanced_fixed | 68% | 57% | 56% | -12pp |
 
+### adaptive model selection (v8)
+
+| Task Set | Adaptive | Best Fixed | Diff |
+|----------|----------|------------|------|
+| world_consistency | **66%** | 63% | +3pp |
+| math_elementary | **85%** | 83% | +2pp |
+| math_middle | 76% | **77%** | -1pp |
+| math_high | **81%** | 77% | +4pp |
+| **Overall** | **77%** | 75% | **+2pp** |
+
+Routing: easy(14%) → single_agent / medium(43%) → best_fixed / hard(43%) → balanced_rotating
+
 ### Key Findings
 
 **Groupthink is real and severe, but model diversity helps.**
@@ -108,28 +121,25 @@ Both extremes (full independence or full conformity) underperform.
 One dissenter node at 30% + two nodes at 80% beats uniform agreement.
 
 **Role rotation is a de-biasing mechanism.**
-Rotating roles boost CORRECT accuracy by +14–19pp by breaking static information flow. Logic tasks benefit most: fixed 72% → rotating 100%.
+Rotating roles boost CORRECT accuracy by +14–19pp. Logic tasks benefit most: fixed 72% → rotating 100%. Valid range: up to middle school difficulty. At high school level, rotation becomes harmful (INCORRECT drops to 31%).
 
 **Multi-model NCA helps more on ambiguous tasks.**
-On structured math, single agent (83%) ties with best NCA. On semantic world_consistency, NCA outperforms single agent by ~10pp. Coordination pays off when tasks are ambiguous.
+On structured math, single agent (83%) ties with best NCA. On semantic world_consistency, NCA outperforms single agent by ~10pp.
 
 **The INCORRECT/CONTRADICTION bias is universal.**
-LLMs prefer to find fault across both math and semantic domains. Single agent: 69% CORRECT vs 98% INCORRECT on math; 30% CONSISTENT vs 96% CONTRADICTION on world_consistency.
-
-**Math tasks far exceed world_consistency accuracy (+20pp).**
-LLMs are fundamentally better at verifiable arithmetic than semantic contradiction detection, supporting the external verifier hypothesis.
-
-**The difficulty wall is at middle school, not high school.**
-best_fixed scores 83% → 72% → 77% across the difficulty series. High school trig/logs/derivatives are easier for LLMs than middle school simultaneous equations, because advanced topics are heavily memorized formulas.
+LLMs prefer to find fault across both math and semantic domains.
 
 **Operation type, not grade level, determines LLM difficulty.**
-Pattern-match (80-100%) > formula+verify (60-80%) > multi-step procedure (40-60%) > symbolic manipulation (20-40%). This ordering is stable across all difficulty levels.
+Pattern-match (80-100%) > formula+verify (60-80%) > multi-step procedure (40-60%) > symbolic manipulation (20-40%). Stable across all difficulty levels.
 
-**Role rotation has a valid range.**
-Rotation helps up to middle school level (+12-20pp). At high school difficulty, it becomes harmful — best_rotating's INCORRECT accuracy collapses to 31%.
+**The difficulty wall is at middle school, not high school.**
+best_fixed: 83% → 72% → 77%. High school trig/logs are easier than middle school simultaneous equations due to training data coverage.
 
-**best_fixed is the most robust configuration.**
-Only -6pp total drop from elementary to high school. The fixed Solver-Verifier-Critic pipeline handles increasing difficulty better than any other pattern.
+**Hard task ceiling at 65% across all domains.**
+math_middle hard (64%), math_high hard (64%), world_consistency (66%) all cluster at 65%. This is a model capability limit, not an architecture limit — the primary target for v9+.
+
+**Adaptive routing validates the difficulty hierarchy.**
+Embedding classifier correctly identifies task difficulty from v7-v7.6 findings. Easy → 86%, Medium → 85%, Hard → 65%.
 
 ```
 v1: groupthink → 99/100 CONTRADICTION (same-model NCA)
@@ -137,6 +147,7 @@ v5: heterogeneous models → 61% (diversity breaks groupthink)
 v6: agreement tuning → 63%, steps=3 optimal (r=0.821)
 v7: role-division → 83% on math, rotation eliminates logic bias
 v7→v7.6: difficulty wall at middle school, operation type determines accuracy
+v8: adaptive routing → 77% overall (+2pp), 65% hard ceiling identified
 ```
 
 ---
@@ -176,6 +187,9 @@ python run_v7_5.py
 
 # v7.6: role-division NCA on high school math tasks
 python run_v7_6.py
+
+# v8: adaptive model selection (350 tasks, embedding classifier)
+python run_v8.py
 ```
 
 ---
@@ -187,13 +201,16 @@ nca-llm-experiment/
 ├── nca_network.py                    # NCA network (v1 baseline)
 ├── nca_network_v6.py                 # v6: agreement intensity per node
 ├── nca_network_v7.py                 # v7: role-division NCA
+├── nca_network_v8.py                 # v8: adaptive routing wrapper
 ├── run_experiment_nca.py             # Fixed vs NCA v1-v4 runner
 ├── run_all_combinations.py           # v5: all 56 model combinations
 ├── run_v6_sampling.py                # v6: random sampling runner
 ├── run_v7.py                         # v7: role-division runner
 ├── run_v7_5.py                       # v7.5: middle school tasks runner
 ├── run_v7_6.py                       # v7.6: high school tasks runner
+├── run_v8.py                         # v8: adaptive model selection runner
 ├── bias_profiler.py                  # Single-model bias profiling
+├── embedding_classifier.py           # v8: difficulty classifier
 ├── math_task_generator.py            # v7: elementary math tasks
 ├── middle_school_task_generator.py   # v7.5: middle school math tasks
 ├── high_school_task_generator.py     # v7.6: high school math tasks
@@ -203,7 +220,8 @@ nca-llm-experiment/
 │   ├── v6_report.md
 │   ├── v7_report.md
 │   ├── v7_5_report.md
-│   └── v7_6_report.md
+│   ├── v7_6_report.md
+│   └── v8_report.md
 └── results/
     ├── fixed_results.jsonl
     ├── nca_results.jsonl             # v1
@@ -214,7 +232,8 @@ nca-llm-experiment/
     ├── v6/                           # 100 random sampling results
     ├── v7/                           # Role-division elementary math
     ├── v7_5/                         # Middle school math results
-    └── v7_6/                         # High school math results
+    ├── v7_6/                         # High school math results
+    └── v8/                           # Adaptive model selection results
 ```
 
 ---
