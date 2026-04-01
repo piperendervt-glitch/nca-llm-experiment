@@ -1,14 +1,17 @@
 """
-run_v9a.py
+run_v9b.py
 
-Run NCA v9a: best_fixed + MetaAgent on all 350 tasks.
+Run NCA v9b: best_fixed + Dynamic Confidence-Weighted Aggregation on all 350 tasks.
 
-One-variable experiment: MetaAgent is the ONLY change from best_fixed.
+One-variable experiment: dynamic weighted aggregation is the ONLY change from best_fixed.
   - Models: qwen2.5:7b + llama3:latest + mistral:7b (fixed)
   - agree: [30, 80, 80] (fixed)
   - steps: 3 (fixed)
   - role: fixed (fixed)
-  - MetaAgent: qwen2.5:7b, intervenes on split only (NEW)
+  - Aggregation: trust-weighted confidence (NEW) instead of simple majority
+  - NO MetaAgent (v9a only)
+  - Online learning: alpha=0.1 EMA weight updates after each task
+  - Initial weights from v7/v7.5/v7.6 per-model accuracy
 """
 
 import json
@@ -26,13 +29,13 @@ from task_generator import generate_tasks as generate_world_consistency_tasks
 from math_task_generator import generate_math_tasks
 from middle_school_task_generator import generate_middle_school_tasks
 from high_school_task_generator import generate_high_school_tasks
-from nca_network_v9a import run_v9a
+from nca_network_v9b import run_v9b, get_aggregator
 
-RESULTS_DIR = Path("results/v9a")
+RESULTS_DIR = Path("results/v9b")
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-RESULTS_PATH = RESULTS_DIR / "v9a_results.jsonl"
-META_LOG_PATH = RESULTS_DIR / "v9a_meta_log.jsonl"
-SUMMARY_PATH = RESULTS_DIR / "v9a_summary.jsonl"
+RESULTS_PATH = RESULTS_DIR / "v9b_results.jsonl"
+WEIGHT_LOG_PATH = RESULTS_DIR / "v9b_weight_log.jsonl"
+SUMMARY_PATH = RESULTS_DIR / "v9b_summary.jsonl"
 
 
 # ── Statistical helpers ────────────────────────────────────────────────────
@@ -63,7 +66,6 @@ def two_prop_ztest(k1: int, n1: int, k2: int, n2: int) -> tuple[float, float]:
 
 
 def fmt_ci(k: int, n: int) -> str:
-    """Format accuracy with 95% CI."""
     if n == 0:
         return "N/A"
     acc = k / n
@@ -81,7 +83,7 @@ def fmt_sig(p: float) -> str:
     return "n.s."
 
 
-# ── Unified task loader (same as v8) ───────────────────────────────────────
+# ── Unified task loader (same as v8/v9a) ─────────────────────────────────
 
 def load_all_tasks() -> list[dict]:
     """Load all 4 task sets into a unified format."""
@@ -188,53 +190,83 @@ def main():
     for s, n in sorted(by_set.items()):
         print(f"    {s}: {n}")
 
+    aggregator = get_aggregator()
+    models = ["qwen2.5:7b", "llama3:latest", "mistral:7b"]
+    print(f"  Initial weights: {aggregator.get_weights()}")
+
     # ── Phase 2: Resume support ─────────────────────────────────────────
     existing = []
     if RESULTS_PATH.exists():
         with open(RESULTS_PATH, "r", encoding="utf-8") as f:
-            existing = [json.loads(line) for line in f if line.strip()]
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    existing.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue  # skip corrupted lines
     if len(existing) >= len(tasks):
         print(f"  Already complete ({len(existing)} results)")
         results = existing
     else:
-        # ── Phase 3: Run best_fixed + MetaAgent ─────────────────────────
-        print(f"\nPhase 3: Running best_fixed + MetaAgent ({len(tasks)} tasks)...")
+        # ── Phase 3: Run best_fixed + weighted aggregation ─────────────
+        print(f"\nPhase 3: Running best_fixed + weighted aggregation ({len(tasks)} tasks)...")
         start_idx = len(existing)
         results = list(existing)
         mode = "a" if start_idx > 0 else "w"
 
+        # If resuming, replay weight updates from existing results
+        if start_idx > 0:
+            print(f"  Resuming from task {start_idx}, replaying weight updates...")
+            for r in existing:
+                if "final_node_outputs" in r:
+                    node_outputs = r["final_node_outputs"]
+                    aggregator.update(node_outputs, models, r["label"])
+            print(f"  Weights after replay: {aggregator.get_weights()}")
+
         total_start = time.time()
 
         with open(RESULTS_PATH, mode, encoding="utf-8") as f_results, \
-             open(META_LOG_PATH, mode, encoding="utf-8") as f_meta:
+             open(WEIGHT_LOG_PATH, mode, encoding="utf-8") as f_weights:
             for i, task in enumerate(tasks):
                 if i < start_idx:
                     continue
 
                 t0 = time.time()
                 try:
-                    nca_result = run_v9a(task["task_input"])
+                    nca_result = run_v9b(task["task_input"])
                     verdict = nca_result["final_verdict"]
+                    simple_majority = nca_result.get("simple_majority", "")
                     groupthink = nca_result.get("groupthink", "unknown")
+                    agg_details = nca_result.get("aggregation_details", {})
                     steps = nca_result.get("steps", [])
-                    meta_intervened = nca_result.get("meta_intervened", False)
-                    meta_reasoning = nca_result.get("meta_reasoning", "")
-                    vote_dist = nca_result.get("vote_distribution", {})
-                    pre_meta_majority = nca_result.get("pre_meta_majority", "")
+
+                    # Extract final node outputs for weight update
+                    last_step = nca_result["steps"][-1]
+                    final_node_outputs = [
+                        last_step["solver"]["output"],
+                        last_step["verifier"]["output"],
+                        last_step["critic"]["output"],
+                    ]
                 except Exception as e:
                     verdict = f"ERROR: {e}"
+                    simple_majority = ""
                     groupthink = "unknown"
+                    agg_details = {}
                     steps = []
-                    meta_intervened = False
-                    meta_reasoning = f"ERROR: {e}"
-                    vote_dist = {}
-                    pre_meta_majority = ""
+                    final_node_outputs = []
 
                 elapsed = time.time() - t0
                 is_correct = verdict_matches(verdict, task["label"])
+                simple_correct = verdict_matches(simple_majority, task["label"])
 
-                # Also check if pre-meta majority would have been correct
-                pre_meta_correct = verdict_matches(pre_meta_majority, task["label"])
+                # Online learning: update weights AFTER verdict
+                weight_changes = {}
+                if final_node_outputs:
+                    weight_changes = aggregator.update(
+                        final_node_outputs, models, task["label"]
+                    )
 
                 record = {
                     "task_id": task["task_id"],
@@ -244,42 +276,43 @@ def main():
                     "label": task["label"],
                     "prediction": verdict,
                     "is_correct": is_correct,
-                    "pattern_used": "best_fixed_meta",
+                    "pattern_used": "best_fixed_weighted",
                     "groupthink": groupthink,
                     "elapsed_sec": round(elapsed, 2),
                     "steps": steps,
-                    # MetaAgent fields
-                    "meta_intervened": meta_intervened,
-                    "meta_reasoning": meta_reasoning,
-                    "vote_distribution": vote_dist,
-                    "pre_meta_majority": pre_meta_majority,
-                    "pre_meta_correct": pre_meta_correct,
+                    # Weighted aggregation fields
+                    "simple_majority": simple_majority,
+                    "simple_correct": simple_correct,
+                    "aggregation_scores": agg_details.get("scores", {}),
+                    "weights_used": agg_details.get("current_weights", {}),
+                    "final_node_outputs": final_node_outputs,
                 }
                 results.append(record)
                 f_results.write(json.dumps(record, ensure_ascii=False) + "\n")
                 f_results.flush()
 
-                # MetaAgent log (compact)
-                meta_entry = {
+                # Weight log
+                weight_entry = {
+                    "task_idx": i,
                     "task_id": task["task_id"],
                     "task_set": task["task_set"],
-                    "task_type": task["task_type"],
-                    "label": task["label"],
-                    "meta_intervened": meta_intervened,
-                    "meta_verdict": verdict,
-                    "meta_correct": is_correct,
-                    "pre_meta_majority": pre_meta_majority,
-                    "pre_meta_correct": pre_meta_correct,
-                    "vote_distribution": vote_dist,
+                    "weights_before": agg_details.get("current_weights", {}),
+                    "weights_after": aggregator.get_weights(),
+                    "weight_changes": weight_changes,
+                    "verdict": verdict,
+                    "is_correct": is_correct,
+                    "simple_majority": simple_majority,
+                    "simple_correct": simple_correct,
+                    "agreed_with_simple": (verdict == simple_majority),
                 }
-                f_meta.write(json.dumps(meta_entry, ensure_ascii=False) + "\n")
-                f_meta.flush()
+                f_weights.write(json.dumps(weight_entry, ensure_ascii=False) + "\n")
+                f_weights.flush()
 
-                meta_tag = " [META]" if meta_intervened else ""
+                diff_tag = "" if verdict == simple_majority else " [DIFF]"
                 status = "OK" if is_correct else "NG"
                 print(
                     f"  [{i+1:3d}/{len(tasks)}] {status} {verdict:14s}"
-                    f"{meta_tag:7s} ({elapsed:.1f}s) "
+                    f"{diff_tag:7s} ({elapsed:.1f}s) "
                     f"[{task['task_set']:18s}] {task['question'][:40]}"
                 )
 
@@ -289,7 +322,7 @@ def main():
 
     # ── Phase 4: Analysis ───────────────────────────────────────────────
     print("\n" + "=" * 80)
-    print("  NCA v9a: MetaAgent Addition Results")
+    print("  NCA v9b: Dynamic Confidence-Weighted Aggregation Results")
     print("=" * 80)
 
     # v8 baselines (from v8 report)
@@ -301,17 +334,19 @@ def main():
     }
     v8_overall = (269, 350)
 
-    v7_bests = {
-        "world_consistency": 0.63,
-        "math_elementary": 0.83,
-        "math_middle": 0.77,
-        "math_high": 0.77,
+    # v9a baselines (from v9a summary)
+    v9a_scores = {
+        "world_consistency": (69, 100),
+        "math_elementary": (81, 100),
+        "math_middle": (55, 75),
+        "math_high": (57, 75),
     }
+    v9a_overall = (262, 350)
 
     # Main results table
-    print(f"\n{'Task Set':<20} | {'v9a':>12} | {'v8(adaptive)':>12} | "
-          f"{'v6/v7 best':>10} | {'Diff(v8)':>8}")
-    print("-" * 75)
+    print(f"\n{'Task Set':<20} | {'v9b':>18} | {'v8(adaptive)':>12} | "
+          f"{'v9a(meta)':>10} | {'Δv8':>6} | {'Δv9a':>6}")
+    print("-" * 85)
 
     overall_correct = 0
     overall_total = 0
@@ -320,26 +355,31 @@ def main():
         st = compute_stats(ts_results)
         v8_k, v8_n = v8_scores[ts]
         v8_acc = v8_k / v8_n
-        v7_best = v7_bests[ts]
+        v9a_k, v9a_n = v9a_scores[ts]
+        v9a_acc = v9a_k / v9a_n
         diff_v8 = st["overall"] - v8_acc
+        diff_v9a = st["overall"] - v9a_acc
         ci_str = fmt_ci(st["n_correct"], st["total"])
-        print(f"{ts:<20} | {ci_str:>12} | {v8_acc:>11.0%} | "
-              f"{v7_best:>9.0%} | {diff_v8:>+7.0%}pp")
+        print(f"{ts:<20} | {ci_str:>18} | {v8_acc:>11.0%} | "
+              f"{v9a_acc:>9.0%} | {diff_v8:>+5.0%}pp | {diff_v9a:>+5.0%}pp")
         overall_correct += st["n_correct"]
         overall_total += st["total"]
 
     overall_acc = overall_correct / overall_total if overall_total else 0
     ci_overall = fmt_ci(overall_correct, overall_total)
     v8_ov_acc = v8_overall[0] / v8_overall[1]
-    diff_ov = overall_acc - v8_ov_acc
-    print(f"{'Overall':<20} | {ci_overall:>12} | {v8_ov_acc:>11.0%} | "
-          f"{'---':>9} | {diff_ov:>+7.0%}pp")
+    v9a_ov_acc = v9a_overall[0] / v9a_overall[1]
+    diff_ov_v8 = overall_acc - v8_ov_acc
+    diff_ov_v9a = overall_acc - v9a_ov_acc
+    print(f"{'Overall':<20} | {ci_overall:>18} | {v8_ov_acc:>11.0%} | "
+          f"{v9a_ov_acc:>9.0%} | {diff_ov_v8:>+5.0%}pp | {diff_ov_v9a:>+5.0%}pp")
 
-    # z-test: v9a vs v8 overall
+    # ── Statistical tests ───────────────────────────────────────────────
+    print("\n--- Statistical Tests (two-proportion z-test) ---")
+
+    # v9b vs v8 overall
     z, p = two_prop_ztest(overall_correct, overall_total, *v8_overall)
-    print(f"\nv9a vs v8 overall: z={z:.3f}, p={p:.4f} ({fmt_sig(p)})")
-
-    # Per-task-set z-tests
+    print(f"\nv9b vs v8 overall: z={z:.3f}, p={p:.4f} ({fmt_sig(p)})")
     for ts in ["world_consistency", "math_elementary", "math_middle", "math_high"]:
         ts_results = [r for r in results if r["task_set"] == ts]
         k1 = sum(1 for r in ts_results if r["is_correct"])
@@ -348,54 +388,55 @@ def main():
         z, p = two_prop_ztest(k1, n1, k2, n2)
         print(f"  {ts}: z={z:.3f}, p={p:.4f} ({fmt_sig(p)})")
 
+    # v9b vs v9a overall
+    z, p = two_prop_ztest(overall_correct, overall_total, *v9a_overall)
+    print(f"\nv9b vs v9a overall: z={z:.3f}, p={p:.4f} ({fmt_sig(p)})")
+    for ts in ["world_consistency", "math_elementary", "math_middle", "math_high"]:
+        ts_results = [r for r in results if r["task_set"] == ts]
+        k1 = sum(1 for r in ts_results if r["is_correct"])
+        n1 = len(ts_results)
+        k2, n2 = v9a_scores[ts]
+        z, p = two_prop_ztest(k1, n1, k2, n2)
+        print(f"  {ts}: z={z:.3f}, p={p:.4f} ({fmt_sig(p)})")
+
     print("=" * 80)
 
-    # ── MetaAgent Intervention Statistics ────────────────────────────────
-    print("\nMetaAgent Intervention Statistics:")
-    meta_tasks = [r for r in results if r.get("meta_intervened", False)]
-    non_meta_tasks = [r for r in results if not r.get("meta_intervened", False)]
-    n_meta = len(meta_tasks)
+    # ── Weighted vs Simple Majority comparison ──────────────────────────
+    print("\nWeighted vs Simple Majority Comparison:")
+    n_diff = sum(1 for r in results
+                 if r.get("prediction") != r.get("simple_majority"))
     n_total = len(results)
+    print(f"  Disagreements: {n_diff} / {n_total} ({n_diff/n_total:.1%})")
 
-    print(f"  Total interventions: {n_meta} / {n_total} tasks ({n_meta/n_total:.0%})")
+    if n_diff > 0:
+        diff_tasks = [r for r in results
+                      if r.get("prediction") != r.get("simple_majority")]
+        weighted_wins = sum(1 for r in diff_tasks if r["is_correct"])
+        simple_wins = sum(1 for r in diff_tasks if r.get("simple_correct", False))
+        print(f"  When they disagree:")
+        print(f"    Weighted correct: {weighted_wins}/{n_diff} ({weighted_wins/n_diff:.1%})")
+        print(f"    Simple correct:   {simple_wins}/{n_diff} ({simple_wins/n_diff:.1%})")
+        print(f"    Net impact: {weighted_wins - simple_wins:+d} tasks")
 
-    if n_meta > 0:
-        meta_correct = sum(1 for r in meta_tasks if r["is_correct"])
-        meta_acc = meta_correct / n_meta
-        # What would majority-only have scored on these same tasks?
-        majority_correct = sum(1 for r in meta_tasks if r.get("pre_meta_correct", False))
-        majority_acc = majority_correct / n_meta
+        # Breakdown by task set
+        print(f"\n  {'Task Set':<20} | {'Disagree':>9} | {'Weighted':>8} | "
+              f"{'Simple':>8} | {'Net':>5}")
+        print("  " + "-" * 60)
+        for ts in ["world_consistency", "math_elementary", "math_middle", "math_high"]:
+            ts_diff = [r for r in diff_tasks if r["task_set"] == ts]
+            if ts_diff:
+                w_k = sum(1 for r in ts_diff if r["is_correct"])
+                s_k = sum(1 for r in ts_diff if r.get("simple_correct", False))
+                print(f"  {ts:<20} | {len(ts_diff):>9} | {w_k:>8} | "
+                      f"{s_k:>8} | {w_k - s_k:>+5}")
+            else:
+                print(f"  {ts:<20} | {'0':>9} | {'-':>8} | {'-':>8} | {'-':>5}")
 
-        print(f"  Intervention accuracy: {fmt_ci(meta_correct, n_meta)}")
-        print(f"  Majority-only accuracy: {fmt_ci(majority_correct, n_meta)} "
-              f"(same {n_meta} tasks)")
-        net_impact = meta_correct - majority_correct
-        print(f"  MetaAgent net impact: {net_impact:+d} tasks "
-              f"({net_impact/n_total:+.1%}pp on overall)")
+    # ── Weight evolution ────────────────────────────────────────────────
+    print(f"\nFinal weights: {aggregator.get_weights()}")
+    print(f"Initial weights were: qwen2.5:7b=0.740, llama3=0.768, mistral=0.796")
 
-        # z-test: MetaAgent vs majority on split tasks
-        z_m, p_m = two_prop_ztest(meta_correct, n_meta, majority_correct, n_meta)
-        print(f"  MetaAgent vs majority on splits: z={z_m:.3f}, p={p_m:.4f} ({fmt_sig(p_m)})")
-
-    # Breakdown by task set
-    print(f"\n  {'Task Set':<20} | {'Interventions':>14} | {'Meta acc':>12} | "
-          f"{'Majority acc':>12}")
-    print("  " + "-" * 70)
-    for ts in ["world_consistency", "math_elementary", "math_middle", "math_high"]:
-        ts_meta = [r for r in meta_tasks if r["task_set"] == ts]
-        if ts_meta:
-            m_k = sum(1 for r in ts_meta if r["is_correct"])
-            maj_k = sum(1 for r in ts_meta if r.get("pre_meta_correct", False))
-            print(f"  {ts:<20} | {len(ts_meta):>3d} / "
-                  f"{sum(1 for r in results if r['task_set']==ts):>3d}"
-                  f" ({len(ts_meta)/sum(1 for r in results if r['task_set']==ts):.0%})"
-                  f" | {fmt_ci(m_k, len(ts_meta)):>12}"
-                  f" | {fmt_ci(maj_k, len(ts_meta)):>12}")
-        else:
-            n_ts = sum(1 for r in results if r["task_set"] == ts)
-            print(f"  {ts:<20} |   0 / {n_ts:>3d} (0%)  | {'N/A':>12} | {'N/A':>12}")
-
-    # CORRECT vs INCORRECT per task set
+    # ── CORRECT vs INCORRECT per task set ───────────────────────────────
     print(f"\n{'Task Set':<20} | {'CORRECT acc':>14} | {'INCORRECT acc':>14}")
     print("-" * 55)
     for ts in ["world_consistency", "math_elementary", "math_middle", "math_high"]:
@@ -403,32 +444,48 @@ def main():
         st = compute_stats(ts_results)
         print(f"{ts:<20} | {st['correct_acc']:>13.0%} | {st['incorrect_acc']:>13.0%}")
 
+    # ── Groupthink distribution ─────────────────────────────────────────
+    print(f"\n{'Task Set':<20} | {'All Correct':>12} | {'All Incorrect':>14} | "
+          f"{'Split':>6}")
+    print("-" * 60)
+    for ts in ["world_consistency", "math_elementary", "math_middle", "math_high"]:
+        ts_results = [r for r in results if r["task_set"] == ts]
+        ac = sum(1 for r in ts_results if r.get("groupthink") == "all_correct")
+        ai = sum(1 for r in ts_results if r.get("groupthink") == "all_incorrect")
+        sp = sum(1 for r in ts_results if r.get("groupthink") == "split")
+        print(f"{ts:<20} | {ac:>12} | {ai:>14} | {sp:>6}")
+
     print("=" * 80)
 
     # ── Save summary ────────────────────────────────────────────────────
     summary = {
+        "experiment": "v9b",
+        "description": "best_fixed + dynamic confidence-weighted aggregation",
         "overall_acc": round(overall_acc, 3),
         "overall_total": overall_total,
         "overall_correct": overall_correct,
-        "meta_interventions": n_meta,
-        "meta_intervention_rate": round(n_meta / n_total, 3) if n_total else 0,
+        "initial_weights": {"qwen2.5:7b": 0.740, "llama3:latest": 0.768,
+                            "mistral:7b": 0.796},
+        "final_weights": aggregator.get_weights(),
+        "learning_rate": 0.1,
+        "disagreements_with_simple": n_diff,
         "per_task_set": {},
     }
-    if n_meta > 0:
-        meta_correct = sum(1 for r in meta_tasks if r["is_correct"])
-        majority_correct = sum(1 for r in meta_tasks if r.get("pre_meta_correct", False))
-        summary["meta_accuracy"] = round(meta_correct / n_meta, 3)
-        summary["majority_accuracy_on_splits"] = round(majority_correct / n_meta, 3)
-        summary["meta_net_impact"] = meta_correct - majority_correct
+    if n_diff > 0:
+        diff_tasks = [r for r in results
+                      if r.get("prediction") != r.get("simple_majority")]
+        weighted_wins = sum(1 for r in diff_tasks if r["is_correct"])
+        simple_wins = sum(1 for r in diff_tasks if r.get("simple_correct", False))
+        summary["weighted_wins"] = weighted_wins
+        summary["simple_wins"] = simple_wins
+        summary["net_impact"] = weighted_wins - simple_wins
 
     for ts in ["world_consistency", "math_elementary", "math_middle", "math_high"]:
         ts_results = [r for r in results if r["task_set"] == ts]
-        ts_meta = [r for r in meta_tasks if r["task_set"] == ts]
         st = compute_stats(ts_results)
-        st["meta_interventions"] = len(ts_meta)
-        if ts_meta:
-            st["meta_accuracy"] = round(
-                sum(1 for r in ts_meta if r["is_correct"]) / len(ts_meta), 3)
+        ts_diff = [r for r in results if r["task_set"] == ts
+                   and r.get("prediction") != r.get("simple_majority")]
+        st["disagreements"] = len(ts_diff)
         summary["per_task_set"][ts] = st
 
     with open(SUMMARY_PATH, "w", encoding="utf-8") as f:
