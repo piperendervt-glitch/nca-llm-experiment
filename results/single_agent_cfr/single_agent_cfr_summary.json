@@ -1,0 +1,298 @@
+{
+  "experiment": "single_agent_cfr",
+  "model": "qwen2.5:7b",
+  "confidence_threshold": 0.8,
+  "n_tasks": 350,
+  "overall_accuracy": 0.66,
+  "overall_accuracy_ci_95": [
+    0.6077,
+    0.7095
+  ],
+  "overall_cfr": 0.341,
+  "n_confident_total": 349,
+  "n_confident_wrong_total": 119,
+  "per_task_set": {
+    "world_consistency": {
+      "n_total": 100,
+      "n_correct": 44,
+      "accuracy": 0.44,
+      "accuracy_ci_95": [
+        0.3408,
+        0.5428
+      ],
+      "n_confident": 100,
+      "confident_pct": 1.0,
+      "n_confident_wrong": 56,
+      "cfr": 0.56,
+      "v9d_cfr": 1.0
+    },
+    "math_elementary": {
+      "n_total": 100,
+      "n_correct": 84,
+      "accuracy": 0.84,
+      "accuracy_ci_95": [
+        0.7532,
+        0.9057
+      ],
+      "n_confident": 99,
+      "confident_pct": 0.99,
+      "n_confident_wrong": 16,
+      "cfr": 0.1616,
+      "v9d_cfr": 0.82
+    },
+    "math_middle": {
+      "n_total": 75,
+      "n_correct": 51,
+      "accuracy": 0.68,
+      "accuracy_ci_95": [
+        0.5622,
+        0.7831
+      ],
+      "n_confident": 75,
+      "confident_pct": 1.0,
+      "n_confident_wrong": 24,
+      "cfr": 0.32,
+      "v9d_cfr": 0.59
+    },
+    "math_high": {
+      "n_total": 75,
+      "n_correct": 52,
+      "accuracy": 0.6933,
+      "accuracy_ci_95": [
+        0.5762,
+        0.7947
+      ],
+      "n_confident": 75,
+      "confident_pct": 1.0,
+      "n_confident_wrong": 23,
+      "cfr": 0.3067,
+      "v9d_cfr": 0.55
+    }
+  },
+  "cfr_by_task_type": {
+    "world_consistency": {
+      "world_consistency": {
+        "n": 100,
+        "n_confident": 100,
+        "n_confident_wrong": 56,
+        "cfr": 0.56
+      }
+    },
+    "math_elementary": {
+      "calculation": {
+        "n": 25,
+        "n_confident": 25,
+        "n_confident_wrong": 5,
+        "cfr": 0.2
+      },
+      "logical": {
+        "n": 25,
+        "n_confident": 25,
+        "n_confident_wrong": 4,
+        "cfr": 0.16
+      },
+      "sequence": {
+        "n": 25,
+        "n_confident": 24,
+        "n_confident_wrong": 3,
+        "cfr": 0.125
+      },
+      "word_problem": {
+        "n": 25,
+        "n_confident": 25,
+        "n_confident_wrong": 4,
+        "cfr": 0.16
+      }
+    },
+    "math_middle": {
+      "algebraic_expr": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 3,
+        "cfr": 0.6
+      },
+      "congruence": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      },
+      "geometry": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      },
+      "inequality": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 2,
+        "cfr": 0.4
+      },
+      "linear_eq": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 4,
+        "cfr": 0.8
+      },
+      "linear_function": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 2,
+        "cfr": 0.4
+      },
+      "polynomial": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 2,
+        "cfr": 0.4
+      },
+      "pythagorean": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      },
+      "quadratic_eq": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 0,
+        "cfr": 0.0
+      },
+      "quadratic_fn": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      },
+      "ratio": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      },
+      "signed_number": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      },
+      "similarity": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 0,
+        "cfr": 0.0
+      },
+      "simultaneous_eq": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 4,
+        "cfr": 0.8
+      },
+      "square_root": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      }
+    },
+    "math_high": {
+      "area": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 2,
+        "cfr": 0.4
+      },
+      "arithmetic_seq": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 3,
+        "cfr": 0.6
+      },
+      "derivative": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 0,
+        "cfr": 0.0
+      },
+      "exponent": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      },
+      "extremum": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 2,
+        "cfr": 0.4
+      },
+      "factoring": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 3,
+        "cfr": 0.6
+      },
+      "integral": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 2,
+        "cfr": 0.4
+      },
+      "logarithm": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 0,
+        "cfr": 0.0
+      },
+      "logic_quad": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 2,
+        "cfr": 0.4
+      },
+      "probability": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 2,
+        "cfr": 0.4
+      },
+      "quadratic_ineq": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      },
+      "quadratic_minmax": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 3,
+        "cfr": 0.6
+      },
+      "recurrence": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      },
+      "trig_identity": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 1,
+        "cfr": 0.2
+      },
+      "trig_value": {
+        "n": 5,
+        "n_confident": 5,
+        "n_confident_wrong": 0,
+        "cfr": 0.0
+      }
+    }
+  },
+  "v9d_reference": {
+    "world_consistency": 1.0,
+    "math_elementary": 0.82,
+    "math_middle": 0.59,
+    "math_high": 0.55
+  }
+}
