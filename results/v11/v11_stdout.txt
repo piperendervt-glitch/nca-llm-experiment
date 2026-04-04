@@ -1,0 +1,37 @@
+============================================================
+v11 Phase 1: System A & System B
+============================================================
+
+Loading 350 tasks...
+  Loaded 350 tasks
+    math_elementary: 100
+    math_high: 75
+    math_middle: 75
+    world_consistency: 100
+
+============================================================
+System A: NCA-LLM baseline (confidence-weighted aggregation)
+============================================================
+[System A] 159/350 done, 191 remaining.
+  [System A] 200/350 tasks (96.5% acc so far) last=32.3s
+  [System A] 250/350 tasks (89.6% acc so far) last=31.6s
+  [System A] 300/350 tasks (87.7% acc so far) last=35.2s
+  [System A] 350/350 tasks (87.7% acc so far) last=37.2s
+[System A] Complete. Results saved to results\v11\system_a_results.jsonl
+
+============================================================
+System B: NCA-LLM + code aggregation (Counter majority)
+============================================================
+[System B] 0/350 done, 350 remaining.
+  [System B] 50/350 tasks (54.0% acc so far) last=29.0s
+  [System B] 100/350 tasks (64.0% acc so far) last=31.5s
+  [System B] 150/350 tasks (72.0% acc so far) last=29.6s
+  [System B] 200/350 tasks (75.0% acc so far) last=35.8s
+  [System B] 250/350 tasks (73.6% acc so far) last=33.4s
+  [System B] 300/350 tasks (74.3% acc so far) last=33.2s
+  [System B] 350/350 tasks (76.0% acc so far) last=33.5s
+[System B] Complete. Results saved to results\v11\system_b_results.jsonl
+
+============================================================
+v11 Phase 1 complete.
+============================================================
