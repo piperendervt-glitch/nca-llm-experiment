@@ -4,6 +4,20 @@
 
 ---
 
+## 北極星
+
+```
+研究の北極星: A-4（確定）
+  「AIの失敗の多くは、人間がAIとの契約書
+  （shared_premises）を更新しなかった結果である」
+
+論文の北極星: 保留
+  実験が貯まってから都度決める
+  必要な体系化が生まれた時に論文を書く
+```
+
+---
+
 ## 完了済み実験
 
 | バージョン | 内容 | 結果 | 主な発見 |
@@ -20,99 +34,58 @@
 | v9c | 反対案専用エージェント（weight=0.5） | 74.3% | ダミープレイヤー問題・0件変更 |
 | v9d | ゲーム理論AntiNode（拒否権+Level-K） | 76.0% | 0件変更・CFR/LPA発見 |
 | single-agent CFR比較 | qwen2.5:7b単独・n=350 | — | confidence無差別（Δ=0.004〜0.021） |
+| v10 | math_middle vs math_high CFR比較 | Case B | 有意差なし（p=0.17）・方向逆転 |
 
----
+### v10の結果詳細
 
-## 実行中
-
-| バージョン | 内容 | 状況 |
-|-----------|------|------|
-| **v10** | **math_middle vs math_high CFR比較実験** | **🔄 実行中（推定4〜6時間）** |
-
-### v10の目的
 ```
-北極星の主張「math_middleが最も過信しやすい」を
-統計的に検証する
+目的: 「math_middleが最も過信しやすい」を統計的検証
+結果: Case B（有意差なし）
 
-必要サンプル: 各723 unanimous決定
-必要タスク数: math_middle 875 / math_high 952
-新規タスク生成済み: 800 / 877（seed=43）
+  math_middle: 14.0% [11.4%, 17.0%]
+  math_high:   16.8% [14.1%, 19.8%]
+  p=0.17
 
-期待される結果:
-  Case A: math_middle CFR > math_high CFR（統計的確認）
-         → 北極星の主張が強化される
-  Case B: 差が再現されない
-         → 「小サンプル観察の不安定性」として記録
+v9dの小サンプル観察（n=62/57）は再現されなかった
+方向すら逆転（v9d: middle>high → v10: high>middle）
+→ 「小サンプルでのCFR比較は不安定」として記録
 ```
 
 ---
 
-## 論文執筆状況
+## 確実に言えること（生データ検証済み）
 
-### 確定済みセクション
-
-| セクション | バージョン | 状態 |
-|-----------|-----------|------|
-| 北極星（North Star） | v3.0 | ✅ 確定 |
-| Methodology | v1.7 | ✅ 確定 |
-| Results 3.3（CFR/LPA） | v1.3 | ✅ 確定（Accept判定） |
-| Results 3.4（集約無効） | v1.0 | ✅ 作成済み・査読待ち |
-
-### 修正待ちセクション
-
-| セクション | 状態 | 待ち事項 |
-|-----------|------|---------|
-| Results 3.5（deliberation vs aggregation） | 未作成 | +15pp修正・比較基準明示 |
-| Results 3.6（world_consistency bias） | 未作成 | — |
-| Abstract | v1.5（旧） | v10結果後に全面改訂 |
-| Introduction | v1.2（旧） | v10結果後に部分改訂 |
-| Related Work | 未着手 | — |
-| Analysis/Discussion | 未着手 | — |
-| Conclusion | 未着手 | — |
-| Limitations | 草稿済み | v10結果を反映 |
-
-### タイトル（確定候補）
-```
-「Deliberation Helps, Aggregation Doesn't:
- Diagnosing Multi-Agent LLM Coordination Limits」
-（3AI承認済み・正式確定はv10結果後）
-```
-
----
-
-## v10完了後の作業順序
+### 強い主張（サンプル安定・構造的）
 
 ```
-Step 1: v10結果を確認
-  Case A → 北極星の主張が強化される
-  Case B → 北極星を修正（「差は不安定」として記録）
+① 集約改善は無効
+  1,400タスク・4独立実験・全て+0pp
+  unanimous 83.5% vs split 62.6%（20.9pp差）
+  モデル能力の問題であり集約の工夫では解決できない
 
-Step 2: Results 3.5作成
-  +15pp（v7 best_fixed 83% vs balanced_fixed 68%）
-  deliberation vs aggregationの対比表
+② 役割分担は有効（審議段階）
+  best_fixed 83% vs balanced_fixed 68%（+15pp）
+  ただしv7・350タスクの単一実験・大規模検証は未実施
 
-Step 3: Results 3.6作成
-  world_consistency label biasの観察
+③ steps数がグループシンクの支配的変数
+  r=0.821（v6）
 
-Step 4: Abstract全面改訂
-  v10結果を反映した北極星ベースで書き直し
+④ 単一エージェントのconfidenceは無差別
+  mean 0.95-0.98・Δ=0.004〜0.021（n=350）
+```
 
-Step 5: Introduction部分改訂
-  Abstract確定後に修正
+### 弱い主張（探索的・要大規模検証）
 
-Step 6: タイトル確定
+```
+⑤ CFRはドメイン依存のパターンを持つ
+  小サンプル（v9d）では差が見えたが
+  大サンプル（v10）では再現されなかった
+  「ドメインによって異なる」は言えるが
+  「どのドメインが最高か」は言えない
 
-Step 7: Related Work作成
-  Du et al. / Liang et al. / Wang et al.等
-
-Step 8: Analysis/Discussion作成
-
-Step 9: Conclusion + Limitations作成
-
-Step 10: 全体通読・数字の統一確認
-  「57%」「84%」等の旧数字が残っていないか
-
-Step 11: Zenodo投稿
+⑥ LPAは探索的シグナル
+  n=7（world_consistency）では評価困難
+  本格的な検証は未実施
 ```
 
 ---
@@ -136,7 +109,11 @@ CFR（v9d・重複除外済み）:
   math_elementary:   9/83  = 10.8% [5.0%, 19.7%]
   math_middle:      17/62  = 27.4% [16.6%, 40.2%]
   math_high:        12/57  = 21.1% [11.4%, 33.9%]
-  ※ math_middleとmath_highのCIが重複 → v10で検証中
+
+CFR（v10・大サンプル）:
+  math_middle: 14.0% [11.4%, 17.0%]（n=800）
+  math_high:   16.8% [14.1%, 19.8%]（n=877）
+  p=0.17（有意差なし）
 
 LPA（v9d）:
   world_consistency: 7/7   = 100%（n=7・CI [59%, 100%]）
@@ -154,35 +131,20 @@ LPA（v9d）:
 
 ---
 
-## 発見された誤りと修正履歴
+## 発見された失敗パターン（Edison的記録）
 
 ```
-① CFRとLPAの混同（最重大）
-  「100%→82%→59%→55%」はCFRではなくLPA
-  真のCFR: 11.4%→10.8%→27.4%→21.1%
-  → Methodology v1.7・Results 3.3 v1.3で修正済み
+実験フェーズ:
+  小サンプル（n<100）でのCFR比較は不安定
+  同じタスクを繰り返す実験は汎化性に問題
+  自動生成レポートに重複データが混入する
+  サンプルサイズを事前計算せずに主張を作った
 
-② 「split: 57%」の誤り
-  v9a単体の数字をシリーズ全体に一般化
-  正しい数字（v9全体）: 62.6%
-  → Results 3.4 v1.0で修正済み
-
-③ 「unanimous: 84%」
-  実際は83.5%（四捨五入で許容範囲）
-
-④ 「+20pp」の誤り
-  異なるタスクセット間の比較だった
-  正しくは「+15pp（balanced_fixed比）」
-  → Results 3.5で修正予定
-
-⑤ math_highの重複データ（v9d）
-  75タスクのはずが168行あった
-  → 全分析で重複除外（first occurrence）済み
-
-根本原因:
-  実験レポートの数字を
-  定義確認なしに論文に転記した
-  → 今後は生データから直接計算・検証
+論文執筆フェーズ:
+  CFRとLPAの混同（定義確認なし）
+  split 57%（v9a単体）を全体に一般化
+  +20ppは異なるタスクセット間の比較だった
+  北極星なしで執筆を開始した
 ```
 
 ---
@@ -193,17 +155,19 @@ LPA（v9d）:
 正しい手順:
   Step 1: 北極星（何を証明したいか）を先に決める
   Step 2: 証拠の定義を確定する（生データから計算できる形で）
-  Step 3: 実験を設計・実行する
-  Step 4: 生データから直接計算する
-  Step 5: レポートと照合する（検証として）
-  Step 6: 図・表を先に完成させる
-  Step 7: 文章を書く（Abstractは最後）
+  Step 3: サンプルサイズを事前計算する
+  Step 4: 実験を設計・実行する
+  Step 5: 生データから直接計算する
+  Step 6: レポートと照合する（検証として）
+  Step 7: 図・表を先に完成させる
+  Step 8: 文章を書く（Abstractは最後）
 
 誤りチェックリスト（論文に数字を書く前）:
   □ この数字は何の定義から来るか？
   □ 生データ（.jsonl）から直接計算できるか？
   □ レポートの数字と一致するか？
   □ 重複データが混入していないか？
+  □ サンプルサイズは十分か？
 ```
 
 ---
@@ -211,14 +175,9 @@ LPA（v9d）:
 ## 実験・実装ロードマップ
 
 ```
-v10結果待ち（実行中）
+v10完了（Case B・2026-04-04）
   ↓
-論文執筆
-  Results 3.5 → 3.6 → Abstract改訂 → Introduction
-  → Related Work → Discussion → Conclusion
-  → 全体通読 → Zenodo投稿
-  ↓
-v11（System A〜D比較）= D-1の検証実験
+v11（System A〜D比較）= D-1の検証実験　← 次
   ↓
 ┌─────────────────────┬─────────────────────┐
 AAS v2 / HyperNCA             D-2・D-3・D-4
@@ -248,7 +207,9 @@ B系・C系（エージェント・AAS系）: D系と独立
   C-3 AAS v5
 ```
 
-### アイデア整理ドキュメント（2026-04-04 commit: 002c4ee）
+---
+
+## アイデア整理ドキュメント（2026-04-04 commit: 002c4ee）
 
 ```
 ideas/NCA-LLM_ideas_sorted.md
